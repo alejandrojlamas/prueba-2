@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Snake AI - Back to the Future Edition</title>
+<style>
+  body {
+    margin: 0;
+    background: linear-gradient(135deg, #000428, #004e92);
+    font-family: 'Audiowide', 'Orbitron', sans-serif;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 {
+    margin-top: 20px;
+    color: #00e5ff;
+    text-shadow: 0 0 10px #ff6b00, 0 0 20px #ff6b00;
+  }
+  canvas {
+    background-color: #000;
+    border: 2px solid #ff6b00;
+    box-shadow: 0 0 15px #00e5ff;
+    margin-top: 20px;
+  }
+  #info{
+    margin-top:10px;
+    font-weight:bold;
+    color:#ff6b00;
+  }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
+</head>
+<body>
+<h1>Snake AI - Back to the Future</h1>
+  <canvas id="game" width="600" height="600"></canvas>
+<div id="info">Score: <span id="score">0</span></div>
+<script>
+const DIRECTIONS = [[0,-1],[1,0],[0,1],[-1,0]];
+class SnakeGame {
+  constructor(width=30, height=30){
+    this.width = width;
+    this.height = height;
+    this.reset();
+  }
+  reset(){
+    const cx = Math.floor(this.width/2);
+    const cy = Math.floor(this.height/2);
+    this.snake = [[cx, cy],[cx-1, cy],[cx-2, cy]];
+    this.direction = 1;
+    this.spawnFood();
+    this.score = 0;
+    return this.getState();
+  }
+  spawnFood(){
+    while(true){
+      const x = Math.floor(Math.random()*this.width);
+      const y = Math.floor(Math.random()*this.height);
+      if(!this.snake.some(p => p[0]==x && p[1]==y)){
+        this.food = [x, y];
+        break;
+      }
+    }
+  }
+  dangerAt(pos){
+    const [x,y]=pos;
+    return x<0 || x>=this.width || y<0 || y>=this.height || this.snake.some(p=>p[0]==x && p[1]==y);
+  }
+  step(action){
+    if(action==0) this.direction=(this.direction+3)%4;
+    else if(action==2) this.direction=(this.direction+1)%4;
+    const [dx,dy]=DIRECTIONS[this.direction];
+    const [hx,hy]=this.snake[0];
+    const oldDist=Math.abs(hx-this.food[0])+Math.abs(hy-this.food[1]);
+    const newHead=[hx+dx,hy+dy];
+    let reward=0;
+    let done=false;
+    if(this.dangerAt(newHead)){
+      done=true; reward=-1; return [this.getState(),reward,done];
+    }
+    this.snake.unshift(newHead);
+    if(newHead[0]==this.food[0] && newHead[1]==this.food[1]){
+      reward=1; this.score++; this.spawnFood();
+    }else{
+      this.snake.pop();
+      const newDist=Math.abs(newHead[0]-this.food[0])+Math.abs(newHead[1]-this.food[1]);
+      reward += newDist<oldDist?0.1:-0.05;
+    }
+    reward -= 0.01;
+    return [this.getState(),reward,done];
+  }
+  getState(){
+    const [hx,hy]=this.snake[0];
+    const dir=this.direction;
+    const dirVec=DIRECTIONS[dir];
+    const leftVec=DIRECTIONS[(dir+3)%4];
+    const rightVec=DIRECTIONS[(dir+1)%4];
+    return [
+      this.dangerAt([hx+leftVec[0], hy+leftVec[1]])?1:0,
+      this.dangerAt([hx+dirVec[0], hy+dirVec[1]])?1:0,
+      this.dangerAt([hx+rightVec[0], hy+rightVec[1]])?1:0,
+      this.food[0] < hx ? 1:0,
+      this.food[0] > hx ? 1:0,
+      this.food[1] < hy ? 1:0,
+      this.food[1] > hy ? 1:0,
+      dir
+    ];
+  }
+}
+class QLearningAgent{
+  constructor(lr=0.1, discount=0.9){
+    this.q={};
+    this.lr=lr; this.gamma=discount;
+  }
+  key(state){return state.join(',');}
+  choose(state,epsilon){
+    if(Math.random()<epsilon) return Math.floor(Math.random()*3);
+    const qs=this.q[this.key(state)]||[0,0,0];
+    const max=Math.max(...qs);
+    return qs.indexOf(max);
+  }
+  learn(state,action,reward,nextState,done){
+    const k=this.key(state);
+    const nk=this.key(nextState);
+    if(!this.q[k]) this.q[k]=[0,0,0];
+    if(!this.q[nk]) this.q[nk]=[0,0,0];
+    const current=this.q[k][action];
+    const nextMax=Math.max(...this.q[nk]);
+    const target=reward+(done?0:this.gamma*nextMax);
+    this.q[k][action]+=this.lr*(target-current);
+  }
+}
+function train(agent,env,episodes){
+  let epsilon=1; const epsMin=0.02; const decay=0.995;
+  for(let ep=0;ep<episodes;ep++){
+    let state=env.reset();
+    let done=false;
+    while(!done){
+      const act=agent.choose(state,epsilon);
+      const res=env.step(act);
+      agent.learn(state,act,res[1],res[0],res[2]);
+      state=res[0];
+      done=res[2];
+    }
+    epsilon=Math.max(epsilon*decay,epsMin);
+  }
+}
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const cell=20;
+const env=new SnakeGame(30,30);
+const agent=new QLearningAgent();
+train(agent,env,1200);
+let state=env.reset();
+let done=false;
+function draw(){
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#00e5ff';
+  env.snake.forEach(([x,y])=>ctx.fillRect(x*cell,y*cell,cell,cell));
+  ctx.fillStyle='#ff6b00';
+  ctx.fillRect(env.food[0]*cell,env.food[1]*cell,cell,cell);
+  document.getElementById('score').textContent=env.score;
+}
+function loop(){
+  if(done) return;
+  const act=agent.choose(state,0);
+  const res=env.step(act);
+  state=res[0];
+  done=res[2];
+  draw();
+  if(!done) setTimeout(loop,100);
+}
+draw();
+setTimeout(loop,500);
+</script>
+</body>
+</html>
