@@ -17,7 +17,7 @@ class SnakeGame:
             self.window = pygame.display.set_mode(
                 (self.width * self.cell_size, self.height * self.cell_size)
             )
-            pygame.display.set_caption("Snake Q-Learning")
+            pygame.display.set_caption("Snake Q-Learning - Back to the Future")
             self.clock = pygame.time.Clock()
         self.reset()
 
@@ -113,13 +113,13 @@ class SnakeGame:
         for x, y in self.snake:
             pygame.draw.rect(
                 self.window,
-                (0, 200, 0),
+                (0, 229, 255),
                 (x * self.cell_size, y * self.cell_size, self.cell_size, self.cell_size),
             )
         fx, fy = self.food
         pygame.draw.rect(
             self.window,
-            (200, 0, 0),
+            (255, 107, 0),
             (fx * self.cell_size, fy * self.cell_size, self.cell_size, self.cell_size),
         )
         pygame.display.flip()
