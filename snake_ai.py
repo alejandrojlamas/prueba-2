@@ -1,14 +1,24 @@
 import random
 import time
 from collections import defaultdict
+import pygame
 
 # Directions: up, right, down, left
 DIRECTIONS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
 
 class SnakeGame:
-    def __init__(self, width=10, height=10):
+    def __init__(self, width=10, height=10, display=False, cell_size=20):
         self.width = width
         self.height = height
+        self.display = display
+        self.cell_size = cell_size
+        if self.display:
+            pygame.init()
+            self.window = pygame.display.set_mode(
+                (self.width * self.cell_size, self.height * self.cell_size)
+            )
+            pygame.display.set_caption("Snake Q-Learning")
+            self.clock = pygame.time.Clock()
         self.reset()
 
     def reset(self):
@@ -89,13 +99,35 @@ class SnakeGame:
         return state
 
     def render(self):
-        board = [['.' for _ in range(self.width)] for _ in range(self.height)]
+        if not self.display:
+            board = [['.' for _ in range(self.width)] for _ in range(self.height)]
+            for x, y in self.snake:
+                board[y][x] = 'S'
+            fx, fy = self.food
+            board[fy][fx] = 'F'
+            print("\n".join("".join(row) for row in board))
+            print("Score:", self.score)
+            return
+
+        self.window.fill((0, 0, 0))
         for x, y in self.snake:
-            board[y][x] = 'S'
+            pygame.draw.rect(
+                self.window,
+                (0, 200, 0),
+                (x * self.cell_size, y * self.cell_size, self.cell_size, self.cell_size),
+            )
         fx, fy = self.food
-        board[fy][fx] = 'F'
-        print("\n".join("".join(row) for row in board))
-        print("Score:", self.score)
+        pygame.draw.rect(
+            self.window,
+            (200, 0, 0),
+            (fx * self.cell_size, fy * self.cell_size, self.cell_size, self.cell_size),
+        )
+        pygame.display.flip()
+        self.clock.tick(10)
+
+    def close(self):
+        if self.display:
+            pygame.quit()
 
 
 class QLearningAgent:
@@ -120,7 +152,7 @@ class QLearningAgent:
 
 if __name__ == "__main__":
     episodes = 300
-    env = SnakeGame(width=10, height=10)
+    env = SnakeGame(width=10, height=10, display=False)
     agent = QLearningAgent(learning_rate=0.1, discount=0.9)
 
     epsilon = 1.0
@@ -139,13 +171,19 @@ if __name__ == "__main__":
         if (ep + 1) % 50 == 0:
             print(f"Episode {ep + 1}, score: {env.score}, epsilon: {epsilon:.3f}")
 
-    # Play one game with learned policy
+    env.close()
+
+    # Play one game with learned policy and display
+    env = SnakeGame(width=10, height=10, display=True)
     state = env.reset()
     done = False
     while not done:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                done = True
         action = agent.choose_action(state, epsilon=0.0)
         next_state, reward, done = env.step(action)
         state = next_state
         env.render()
-        time.sleep(0.1)
     print("Final score:", env.score)
+    env.close()
